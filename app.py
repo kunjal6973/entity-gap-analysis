@@ -82,26 +82,24 @@ def main():
         for url in competitor_urls:
             competitor_entities[url] = extract_entities(url, client)
 
-        # Find entities covered by all competitors but missing in the main URL
-        # We'll track total mentions and how many competitor sources mention each entity
+        # Build a dictionary of entities that appear in competitor URLs
+        # but NOT in the main URL:
         missed_entities = defaultdict(lambda: {'count': 0, 'type': '', 'sources': []})
 
         for url, entities in competitor_entities.items():
             for entity_id, info in entities.items():
+                # If entity is missing from main URL
                 if entity_id not in main_entities:
                     missed_entities[entity_id]['count'] += info['count']
                     missed_entities[entity_id]['type'] = info['type']
                     missed_entities[entity_id]['sources'].append(url)
 
-        # Build a DataFrame, but only include entities that appear in ALL competitor URLs
-        total_competitors = len(competitor_urls)
+        # Create DataFrame but only include entities that appear in AT LEAST 2 competitor URLs
         df_data = []
         for entity_id, info in missed_entities.items():
-            # 'Found In' is how many competitor URLs mention the entity
             found_in_count = len(info['sources'])
 
-            # We only want entities found in ALL competitor URLs
-            if found_in_count == total_competitors:
+            if found_in_count >= 2:  # "More than 1 competitor"
                 df_data.append({
                     'Entity': entity_id,
                     'Type': info['type'],
@@ -111,14 +109,14 @@ def main():
                 })
 
         df = pd.DataFrame(df_data)
-        # Sort by total mentions
-        df = df.sort_values('Total Mentions', ascending=False)
 
-        st.subheader("Entities Used by All Competitors but Missing in Main URL:")
-        st.dataframe(df)
-
-        # Optional: allow downloading the CSV
+        # Safely sort the DataFrame if it isn't empty
         if not df.empty:
+            df = df.sort_values('Total Mentions', ascending=False)
+            st.subheader("Entities Mentioned by More Than 1 Competitor (but Missing in Main URL):")
+            st.dataframe(df)
+
+            # Optional: allow downloading the CSV
             csv_data = df.to_csv(index=False)
             st.download_button(
                 label="Download CSV",
@@ -126,6 +124,8 @@ def main():
                 file_name="competitive_entity_analysis.csv",
                 mime="text/csv",
             )
+        else:
+            st.info("No entities found that match the criteria (i.e., used by more than one competitor but missing in your URL).")
 
 if __name__ == "__main__":
     main()
